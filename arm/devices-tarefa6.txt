@@ -1,0 +1,12 @@
+%7segs Mostrador
+# 0x90030 decimos de segundo
+# 0x90031 segundos
+0x90031
+0x90030
+
+%buttons Comando
+Start/Stop 0x90010 0 T
+Reset 0x90011 0 P
+
+%timer
+0x90020 7

@@ -1,0 +1,17 @@
+%buttons Comando
+VM 0x90010 0 P
+VD 0x90011 0 P
+AM 0x90012 0 P
+AZ 0x90013 0 P
+
+%timer
+0x90020 7
+
+%7segs Mostrador
+# 0x90030 decimos de segundo
+# 0x90031 segundos
+0x90031
+0x90030
+
+%leds Sinais
+rgyb 0x90040
