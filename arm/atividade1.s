@@ -22,7 +22,8 @@
 	.set DISPLAY_SEG,	0x90031
 	.set LEDS, 			0x90040
 @ constantes
-	.set INTERVAL,1000
+	.set INTERVAL_DISPLAY, 100
+	.set PRIMEIRO_BIT_MASCARA, 0x01
 
 @ define tamanho das pilhas
 	.equ TAM_PILHA_FIQ,0x100
@@ -49,7 +50,7 @@ _start:
 
 	@ inicializa random
 	ldr     r0,=init        	@ carrega primeiro parâmetro
-	mov     r1,#2           	@ carrega segundo parâmetro
+	mov     r1,#4           	@ carrega segundo parâmetro
 	bl      init_by_array   	@ inicializa
 
 	mov 	r0, #0				@ valor display
@@ -57,15 +58,32 @@ _start:
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
 	bl 		display				@ mostra valor inicial
 	pop 	{r0-r3,lr}			@ restaura valores dos registradores
-	ldr		r3, =INTERVAL
-	ldr		r6, =TIMER
-	str  	r3, [r6]			@ seta timer
 
-loop:
+	push 	{r0-r3,lr}
+	ldr 	r1, =V
+	ldr 	r1, [r1]
+	mov 	r0, #6
+	sub 	r0, r1
+	ldr 	r1, =INTERVAL_DISPLAY
+	mul 	r0, r1
+	bl	 	redefine_timer
+	pop 	{r0-r3,lr}
+
+	mov 	r8, #0x00		@ r8 contem o numero de vezes que um botao foi mostrado
+
+loop_display:
+	@ldr 	r4, =N
+	@ldr 	r5, [r4]			@ r5 contem N
+	@cmp 	r8, r5 				@ Se mostrou todos os botoes da fase (N botoes)
+	@moveq	r8, #0x01
+	@pusheq 	{r0-r3,lr}
+	@bleq 	atualiza_variaveis
+	@popeq 	{r0-r3,lr}
+
 	ldr		r3, =flag
 	ldr		r2, [r3]
 	cmp		r2, #0
-	beq		loop
+	beq		loop_display
 	mov		r2, #0				@ reseta flag
 	str		r2, [r3]
 
@@ -80,38 +98,53 @@ loop:
 	pop 	{r0-r3,lr}
 
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
-	bl 		gera_sequencia		@ mostra valor atual do cronometro
+	bl 		mostra_led			@ mostra valor atual do cronometro
 	pop 	{r0-r3,lr}			@ restaura valores dos registradores
-	b		loop
 
+	add 	r8, #1
+	b		loop_display
 
-@ gera_sequencia
-@ procedimento gera sequencia aleatória
-@ entrada:	valor do display em r0
+@ mostra_led
+@ procedimento mostra um led aleatorio
+@ entrada:	sequencia de botoes em r0
 @ saida:	nao ha
-gera_sequencia:
+mostra_led:
     push	{r4-r11}			@ guarda valores dos registradores
+
+gera_led:
+	push	{lr}				@ guarda valores dos registradores na pilha
+	bl 		botao_aleatorio		@ escolhe um botao aleatorio, valor em r0
+	pop 	{lr}				@ restaura valores dos registradores
+
+	ldr 	r2, =ultimo_led
+	ldr 	r3, [r2]
+	cmp 	r0, r3 				@ Se o botao for o mesmo exibido na ultima vez
+	beq 	gera_led			@ escolhe novo led
+
+	ldr 	r4, =LEDS
+	str 	r0, [r4]			@ acende leds
+	str 	r0, [r2]
+
+	pop 	{r4-r11}			@ restaura regs
+	bx		lr
+
+@ botao_aleatorio
+@ procedimento gera sequencia aleatória
+@ entrada:	nao ha
+@ saida:	nao ha
+botao_aleatorio:
+    push	{r4-r11}			@ oguarda valores dos registradores
 
     push    {lr}          		@ guarda valores dos regs
 	bl      genrand_int32		@ chama gerador, resultado em r0
 	pop 	{lr}
-
-	push    {r0-r3,lr}          @ guarda valores dos regs
-	bl		mostra_botoes		@ chama mostrar_botoes
-	pop 	{r0-r3,lr}
+	lsr 	r0, #30				@ 2 bits aleatorios (valores no intervalo [0,4])
+	ldr 	r1, =PRIMEIRO_BIT_MASCARA
+	lsl 	r0, r1, r0			@ r0 contem um unico bit 1
 
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr					@ retorna
 
-
-mostra_botoes:
-    push	{r4-r11}			@ guarda valores dos registradores
-
-	ldr 	r4, =LEDS
-	str 	r0, [r4]			@ acende leds
-
-	pop 	{r4-r11}			@ restaura regs
-	bx		lr
 
 @ redefine_timer
 @ procedimento define/redefine o timer do sistema
@@ -145,6 +178,28 @@ display:
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr					@ retorna
 
+@ atualiza_variaveis
+@ procedimento atualiza variaveis F, N
+@ entrada:	nao ha
+@ saida:	nao ha
+atualiza_variaveis:
+	push	{r4-r11}			@ guarda valores dos registradores
+
+	add 	r5, #1 				@ incrementa N
+	str 	r5, [r4]
+	ldr 	r4, =F
+	ldr 	r5, [r4] 			@ r5 contem F
+	add 	r5, #1 				@ incremente F
+	str 	r5, [r4]
+
+	@ TESTE
+	mov 	r0, #0xF
+	bl 		mostra_led
+espera:
+	b espera
+
+	pop 	{r4-r11}			@ restaura regs
+	bx		lr
 
 @ tratador da interrupcao
 @ aqui quando timer expirou
@@ -159,6 +214,14 @@ tratador_timer:
 	.data
 flag:
 	.word 0
+F:
+	.word 1
+N:
+	.word 8
+V:
+	.word 1
+ultimo_led:
+	.word 0xF
 digitos:
 	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b
 init:
@@ -166,6 +229,7 @@ init:
 	.long 0x234
 	.long 0x345
 	.long 0x456
+
 
 
 
