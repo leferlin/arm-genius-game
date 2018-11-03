@@ -22,7 +22,9 @@
 	.set DISPLAY_SEG,	0x90031
 	.set LEDS, 			0x90040
 @ constantes
-	.set INTERVAL_DISPLAY, 100
+	.set INTERVALO_DISPLAY, 100
+	.set INTERVALO_PRIMEIRO_BOTAO, 3000
+	.set INTERVALO_DEMAIS_BOTAO, 1000
 	.set PRIMEIRO_BIT_MASCARA, 0x01
 
 @ define tamanho das pilhas
@@ -59,26 +61,28 @@ _start:
 	bl 		display				@ mostra valor inicial
 	pop 	{r0-r3,lr}			@ restaura valores dos registradores
 
+	@ calcula intervalo botoes
 	push 	{r0-r3,lr}
 	ldr 	r1, =V
 	ldr 	r1, [r1]
 	mov 	r0, #6
 	sub 	r0, r1
-	ldr 	r1, =INTERVAL_DISPLAY
+	ldr 	r1, =INTERVALO_DISPLAY
 	mul 	r0, r1
-	bl	 	redefine_timer
+	bl	 	redefine_timer		@ seta timer
 	pop 	{r0-r3,lr}
 
-	mov 	r8, #0x00		@ r8 contem o numero de vezes que um botao foi mostrado
+	mov 	r8, #0x00			@ r8 contem o numero de vezes que um botao foi mostrado
 
 loop_display:
-	@ldr 	r4, =N
-	@ldr 	r5, [r4]			@ r5 contem N
-	@cmp 	r8, r5 				@ Se mostrou todos os botoes da fase (N botoes)
-	@moveq	r8, #0x01
-	@pusheq 	{r0-r3,lr}
-	@bleq 	atualiza_variaveis
-	@popeq 	{r0-r3,lr}
+	@ testa se ja mostrou todos leds
+	ldr 	r4, =N
+	ldr 	r5, [r4]			@ r5 contem N
+	cmp 	r8, r5 				@ Se mostrou todos os botoes da fase (N botoes)
+	moveq	r8, #0x01
+	pusheq 	{r0-r3,lr}
+	bleq 	aguarda_primeiro_botao
+	popeq 	{r0-r3,lr}
 
 	ldr		r3, =flag
 	ldr		r2, [r3]
@@ -162,8 +166,7 @@ redefine_timer:
 @ TESTE
 @ display
 @ procedimento escreve os digitos nos displays de 7 segmentos
-@ entrada:	decimos de segundo em r0
-@			segundos em r1
+@ entrada:	segundos em r0
 @ saida:	nao ha
 display:
 	push	{r4-r11}			@ guarda valores dos registradores
@@ -192,14 +195,46 @@ atualiza_variaveis:
 	add 	r5, #1 				@ incremente F
 	str 	r5, [r4]
 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 	@ TESTE
+fim:
 	mov 	r0, #0xF
-	bl 		mostra_led
+	ldr 	r4, =LEDS
+	str 	r0, [r4]			@ acende leds
+	mov 	r0, #10
+	bl 		display
 espera:
 	b espera
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr
+
+@ atualiza_variaveis
+@ procedimento aguarda que um botao seja pressiondo
+@ em um limite tempo predeterminado
+@ entrada:	nao ha
+@ saida:	nao ha
+aguarda_primeiro_botao:
+	push 	{r4-r11}
+
+	push 	{r0-r3,lr}
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo INTERVALO_PRIMEIRO_BOTAO
+	pop 	{r0-r3,lr}
+aguarda:
+	ldr		r3, =flag
+	ldr		r2, [r3]
+	cmp		r2, #0
+	beq		aguarda
+	mov		r2, #0				@ reseta flag
+	str		r2, [r3]
+
+	@ TESTE
+	b 		fim
+
+	@pop 	{r4-r11}
+	@bl		lr
 
 @ tratador da interrupcao
 @ aqui quando timer expirou
@@ -223,14 +258,12 @@ V:
 ultimo_led:
 	.word 0xF
 digitos:
-	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b
+	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f
 init:
 	.long 0x123
 	.long 0x234
 	.long 0x345
 	.long 0x456
-
-
 
 
 
