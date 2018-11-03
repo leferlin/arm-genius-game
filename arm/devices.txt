@@ -11,7 +11,7 @@ AZ 0x90013 0 P
 # 0x90030 decimos de segundo
 # 0x90031 segundos
 0x90031
-0x90030
+#0x90030
 
 %leds Sinais
 rgyb 0x90040

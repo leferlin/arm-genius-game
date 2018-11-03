@@ -1,0 +1,18 @@
+Para compilar o programa, use digite os comandos:
+
+arm-none-eabi-gcc -c random.c
+
+(compila random.c para o arquivo objeto random.o, ainda não linkado)
+
+arm-none-eabi-as -o test.o test.s
+
+arm-none-eabi-ld -T mapa.lds -o test random.o test.o
+
+(linka random.o com test.o para gerar o executável test) 
+
+Então inicie o simulador:
+
+armsim -d devices.txt -l test
+
+No simulador, execute "g _start".
+
