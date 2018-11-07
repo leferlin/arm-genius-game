@@ -1,16 +1,16 @@
 # Makefile atividade 1 - MC404
 
-permitions:
+x:
 	chmod +x arm*
 
 random: random.c
-	./arm-none-eabi-gcc -c random.c
+	arm-none-eabi-gcc -c random.c
 
 assembler: atividade1.s
-	./arm-none-eabi-as -o atividade1.o atividade1.s
+	./arm-none-eabi-linux-as -o atividade1.o atividade1.s
 
-linker: random.o atividade1.o mapa.lds
-	./arm-none-eabi-ld -o atividade1 -Tmapa.lds atividade1.o random.o
+linker: random assembler mapa.lds
+	./arm-none-eabi-linux-ld -o atividade1 -T mapa.lds atividade1.o random.o
 
-run: devices.txt atividade1
+run: devices.txt linker
 	./armsim -d devices.txt -l atividade1
