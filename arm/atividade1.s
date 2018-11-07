@@ -49,14 +49,17 @@ _start:
 	bic 	r0, r0, #FIQ  	    @ interrupções IRQ habilitadas
 	msr		cpsr, r0			@ processador agora no modo usuário
 	mov		sp, #0x40000		@ pilha do usuário no final da memória
-
+ini:
 	@ inicializa random
 	ldr     r0,=init        	@ carrega primeiro parâmetro
 	mov     r1,#4           	@ carrega segundo parâmetro
 	bl      init_by_array   	@ inicializa
 
-	mov 	r0, #0				@ valor display
+	ldr 	r4, =LEDS
+	mov 	r0, #0
+	str 	r0, [r4]			@ acende leds
 
+	mov 	r0, #0				@ valor display
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
 	bl 		display				@ mostra valor inicial
 	pop 	{r0-r3,lr}			@ restaura valores dos registradores
@@ -72,14 +75,14 @@ _start:
 	bl	 	redefine_timer		@ seta timer
 	pop 	{r0-r3,lr}
 
-	mov 	r8, #0x00			@ r8 contem o numero de vezes que um botao foi mostrado
 
 loop_display:
 	@ testa se ja mostrou todos leds
+	ldr 	r7, =n_leds
+	ldr 	r8, [r7] 			@ r8 contem numerdo de leds mostrados
 	ldr 	r4, =N
 	ldr 	r5, [r4]			@ r5 contem N
-	cmp 	r8, r5 				@ Se mostrou todos os botoes da fase (N botoes)
-	moveq	r8, #0x01
+	cmp 	r8, r5 				@ Se mostrou todos os leds
 	beq 	aguarda_primeiro_botao
 
 	ldr		r3, =flag
@@ -100,11 +103,152 @@ loop_display:
 	pop 	{r0-r3,lr}
 
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
-	bl 		mostra_led			@ mostra valor atual do cronometro
+	bl 		mostra_led			@ mostra led aleatorio
 	pop 	{r0-r3,lr}			@ restaura valores dos registradores
 
+	ldr 	r7, =n_leds
+	ldr 	r8, [r7]
 	add 	r8, #1
+	str 	r8, [r7]			@ atualiza numero leds mostrados
 	b		loop_display
+
+
+@ aguarda_primeiro_botao
+@ aguarda que um botao seja pressiondo
+@ em um limite tempo predeterminado
+aguarda_primeiro_botao:
+	@ redefine timer
+	push 	{r0-r3,lr}
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo INTERVALO_PRIMEIRO_BOTAO
+	pop 	{r0-r3,lr}
+aguarda1:
+	@ verifica se o timer expirou (3s)
+	ldr		r3, =flag
+	ldr		r2, [r3]
+	cmp		r2, #0
+	movne	r2, #0				@ reseta flag
+	strne	r2, [r3]
+	@ TESTE
+	bne		fim
+
+	@ verifica se um botao foi precionado
+	push 	{r0-r3,lr}
+	bl 		le_botoes
+	mov 	r8, r0				@ botao lido em r8
+	pop 	{r0-r3,lr}
+
+	cmp 	r8, #-1				@ Se nao foi pressiondo nenhum botao
+	beq		aguarda1			@ aguarda
+	ldr 	r5, =seq_digitada	@ caso contrario
+	ldr 	r4, [r5]
+	lsl 	r4, #2
+	orr 	r4, r8 				@ atualiza botoes lidos
+	str 	r4, [r5]			@ salva botoes lidos
+	mov 	r0, #0x01
+	ldr 	r3, =n_botoes		@ r3 contem end n_botoes
+	str 	r0, [r3]			@ primeiro botao lido
+	b		aguarda_demais_botoes
+
+
+@ aguarda_demais_botoes
+@ aguada que botoes sejam
+@ precionados em um tempo de 1 s
+aguarda_demais_botoes:
+	@ redefine timer
+	push 	{r0-r3,lr}
+	ldr 	r0, =INTERVALO_DEMAIS_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo INTERVALO_PRIMEIRO_BOTAO
+	pop 	{r0-r3,lr}
+
+aguarda2:
+	@ verifica se o timer expirou (1s)
+	ldr		r3, =flag
+	ldr		r2, [r3]
+	cmp		r2, #0
+	movne	r2, #0				@ reseta flag
+	strne	r2, [r3]
+	@ TESTE
+	bne		fim
+
+	@ verifica se um botao foi precionado
+	push 	{r0-r3,lr}
+	bl 		le_botoes
+	mov 	r8, r0				@ botao lido em r8
+	pop 	{r0-r3,lr}
+
+	cmp 	r8, #-1				@ Se nao foi pressiondo nenhum botao
+	beq		aguarda2
+	ldr 	r7, =seq_digitada	@ Caso contrario
+	ldr 	r6, [r7]
+	lsl 	r6, #2
+	orr 	r6, r8				@ atualaliza botoes lidos
+	str 	r6, [r7]			@ salva botoes lidos
+	ldr 	r3, =n_botoes		@ r3 contem end n_botoes
+	ldr 	r4, [r3]			@ r4 contem n_botoes
+	add 	r4, #1				@ atualiza n_botoes
+	str		r4, [r3]
+	@ verifica se ja foram pressionados todos
+	ldr 	r2, =N
+	ldr 	r2, [r2]
+	cmp 	r2, r4
+	beq 	compara_sequencia
+	b		aguarda_demais_botoes
+
+
+@ compara_sequencia
+@ procedimento compara sequecian digitada com sequencia original
+@ entrada:	nao ha
+@ saida:	nao há
+compara_sequencia:
+	ldr 	r4, =seq_correta
+	ldr 	r4, [r4]
+	ldr 	r5, =seq_digitada
+	ldr 	r5, [r5]
+	cmp 	r4, r5
+	beq 	proxima_fase
+	@ TESTE
+	b 		fim
+
+
+@ le_botoes
+@ procedimento le o proximo botao pressionado
+@ entrada:	nao ha
+@ saida:	numero do botao em r0
+le_botoes:
+	push {r4-r11}
+	@ botao vermelho
+	ldr 	r4, =VM
+	ldrb 	r4, [r4]
+	cmp 	r4, #0x01
+	moveq 	r0, #0
+	popeq 	{r4-r11}
+	bxeq 		lr
+	@ botao verde
+	ldr 	r4, =VD
+	ldrb 	r4, [r4]
+	cmp 	r4, #0x01
+	moveq 	r0, #1
+	popeq 	{r4-r11}
+	bxeq 		lr
+	@ botao amarelo
+	ldr 	r4, =AM
+	ldrb 	r4, [r4]
+	cmp 	r4, #0x01
+	moveq 	r0, #2
+	popeq 	{r4-r11}
+	bxeq 		lr
+	@ botao azul
+	ldr 	r4, =AZ
+	ldrb 	r4, [r4]
+	cmp 	r4, #0x01
+	moveq 	r0, #3
+	popeq 	{r4-r11}
+	bxeq 		lr
+	@ caso default: nenhum botao lido
+	mov 	r0, #-1
+	pop 	{r4-r11}
+	bx 		lr
 
 @ mostra_led
 @ procedimento mostra um led aleatorio
@@ -122,6 +266,12 @@ gera_led:
 	ldr 	r3, [r2]
 	cmp 	r0, r3 				@ Se o botao for o mesmo exibido na ultima vez
 	beq 	gera_led			@ escolhe novo led
+								@ Caso contrario
+	ldr 	r7, =seq_correta
+	ldr 	r6, [r7]
+	lsl 	r6, #2
+	orr 	r6, r0				@ atualaliza sequencia correta
+	str 	r6, [r7]			@ salva sequencia
 
 	ldr 	r4, =LEDS
 	str 	r0, [r4]			@ acende leds
@@ -179,19 +329,33 @@ display:
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr					@ retorna
 
-@ atualiza_variaveis
-@ procedimento atualiza variaveis F, N
-@ entrada:	nao ha
-@ saida:	nao ha
-atualiza_variaveis:
-	push	{r4-r11}			@ guarda valores dos registradores
-
+@ proxima_fase
+@ atualiza variaveis F, N
+proxima_fase:
+	ldr 	r4, =N
+	ldr 	r5, [r4] 			@ r5 contem N
 	add 	r5, #1 				@ incrementa N
 	str 	r5, [r4]
 	ldr 	r4, =F
 	ldr 	r5, [r4] 			@ r5 contem F
 	add 	r5, #1 				@ incremente F
 	str 	r5, [r4]
+	ldr 	r4, =n_botoes
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia numero de botoes
+	ldr 	r4, =n_leds
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia numero de leds
+	ldr 	r4, =seq_correta
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia sequencia correta
+	ldr 	r4, =seq_digitada
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia sequencia digitada
+	ldr 	r4, =ultimo_led
+	mov 	r5, #0x0F
+	str 	r5, [r4]			@ reinicia ultimo led
+	b 		ini
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 	@ TESTE
@@ -207,145 +371,6 @@ espera:
 
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr
-
-@ atualiza_variaveis
-@ procedimento aguarda que um botao seja pressiondo
-@ em um limite tempo predeterminado
-@ entrada:	nao ha
-@ saida:	nao ha
-aguarda_primeiro_botao:
-	push 	{r4-r11}
-	@ redefine timer
-	push 	{r0-r3,lr}
-	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
-	bl	 	redefine_timer		@ seta timer com intervalo INTERVALO_PRIMEIRO_BOTAO
-	pop 	{r0-r3,lr}
-aguarda1:
-	@ verifica se o timer expirou (3s)
-	ldr		r3, =flag
-	ldr		r2, [r3]
-	cmp		r2, #0
-	movne	r2, #0				@ reseta flag
-	strne	r2, [r3]
-	@ TESTE
-	bne		fim
-
-	@ verifica se um botao foi precionado
-	push 	{r0-r3,lr}
-	bl 		le_botoes
-	mov 	r8, r0				@ botao lido em r8
-	pop 	{r0-r3,lr}
-
-	cmp 	r8, #-1				@ Se nao foi pressiondo nenhum botao
-	beq		aguarda1			@ aguarda
-	ldr 	r5, =seq			@ caso contrario
-	ldr 	r4, [r5]
-	lsl 	r4, #2
-	orr 	r4, r8 				@ atualiza botoes lidos
-	str 	r4, [r5]			@ salva botoes lidos
-	mov 	r0, #0x01
-	ldr 	r3, =n_botoes		@ r3 contem end n_botoes
-	ldr 	r0, [r3]			@ primeiro botao lido
-	b		aguarda_demais_botoes
-
-
-@ aguarda_demais_botoes
-@ procedimento aguada que botoes sejam
-@ precionados em um tempo de 1 s
-@ entrada:	nao ha
-@ saida: 	nao ha
-aguarda_demais_botoes:
-	push 	{r4-r11}
-	@ redefine timer
-	push 	{r0-r3,lr}
-	ldr 	r0, =INTERVALO_DEMAIS_BOTAO
-	bl	 	redefine_timer		@ seta timer com intervalo INTERVALO_PRIMEIRO_BOTAO
-	pop 	{r0-r3,lr}
-
-aguarda2:
-	@ verifica se o timer expirou (1s)
-	ldr		r3, =flag
-	ldr		r2, [r3]
-	cmp		r2, #0
-	movne	r2, #0				@ reseta flag
-	strne	r2, [r3]
-	@ TESTE
-	bne		fim
-
-	@ verifica se ja foram pressionados todos
-	ldr 	r2, =N
-	ldr 	r2, [r2]
-	ldr 	r3, =n_botoes		@ r3 contem end n_botoes
-	ldr 	r4, [r3]			@ r4 contem n_botoes
-	cmp 	r2, r4
-	beq 	compara_sequencia
-
-	@ verifica se um botao foi precionado
-	push 	{r0-r3,lr}
-	bl 		le_botoes
-	mov 	r8, r0				@ botao lido em r8
-	pop 	{r0-r3,lr}
-
-	cmp 	r8, #-1				@ Se nao foi pressiondo nenhum botao
-	beq		aguarda2
-	ldr 	r7, =seq			@ Caso contrario
-	ldr 	r6, [r7]
-	lsl 	r6, #2
-	orr 	r6, r8				@ atualaliza botoes lidos
-	str 	r6, [r7]			@ salva botoes lidos
-	add 	r4, #1				@ atualiza n_botoes
-	str		r4, [r3]
-	b		aguarda_demais_botoes
-
-
-@ compara_sequencia
-@ procedimento compara sequecian digitada com sequencia original
-@ entrada:	nao ha
-@ saida:	nao há
-compara_sequencia:
-
-	@ TESTE
-	b 		fim
-
-
-@ le_botoes
-@ procedimento le o proximo botao pressionado
-@ entrada:	nao ha
-@ saida:	numero do botao em r0
-le_botoes:
-	push {r4-r11}
-	@ botao vermelho
-	ldr 	r4, =VM
-	ldrb 	r4, [r4]
-	cmp 	r4, #0x01
-	moveq 	r0, #0
-	popeq 	{r4-r11}
-	bxeq 		lr
-	@ botao verde
-	ldr 	r4, =VD
-	ldrb 	r4, [r4]
-	cmp 	r4, #0x01
-	moveq 	r0, #1
-	popeq 	{r4-r11}
-	bxeq 		lr
-	@ botao amarelo
-	ldr 	r4, =AM
-	ldrb 	r4, [r4]
-	cmp 	r4, #0x01
-	moveq 	r0, #2
-	popeq 	{r4-r11}
-	bxeq 		lr
-	@ botao azul
-	ldr 	r4, =AZ
-	ldrb 	r4, [r4]
-	cmp 	r4, #0x01
-	moveq 	r0, #3
-	popeq 	{r4-r11}
-	bxeq 		lr
-	@ caso default: nenhum botao lido
-	mov 	r0, #-1
-	pop 	{r4-r11}
-	bx 		lr
 
 
 @ tratador da interrupcao
@@ -364,17 +389,21 @@ flag:
 F:
 	.word 1
 N:
-	.word 8
+	.word 2
 V:
 	.word 1
 ultimo_led:
 	.word 0xF
 n_botoes:						@ numero de botoes digitados
 	.word 0x00
-seq:							@ sequencia digitada
+n_leds:
+	.word 0x00					@ numero de leds mostrados
+seq_correta:
+	.word 0x00
+seq_digitada:					@ sequencia digitada
 	.word 0x00
 digitos:
-	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f
+	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f,0x4e
 init:
 	.long 0x123
 	.long 0x234
