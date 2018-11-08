@@ -21,11 +21,52 @@
 	@.set DISPLAY_DEC,	0x90030
 	.set DISPLAY_SEG,	0x90031
 	.set LEDS, 			0x90040
+	.set ADISPLAY_DAT,	0x90001
+	.set ADISPLAY_CMD,	0x90000
 @ constantes
 	.set INTERVALO_DISPLAY, 100
 	.set INTERVALO_PRIMEIRO_BOTAO, 3000
 	.set INTERVALO_DEMAIS_BOTAO, 2000
 	.set PRIMEIRO_BIT_MASCARA, 0x01
+
+@ constantes para "commands"
+        .set LCD_CLEARDISPLAY,0x01
+        .set LCD_RETURNHOME,0x02
+        .set LCD_ENTRYMODESET,0x04
+        .set LCD_DISPLAYCONTROL,0x08
+        .set LCD_CURSORSHIFT,0x10
+        .set LCD_FUNCTIONSET,0x20
+        .set LCD_SETCGRAMADDR,0x40
+        .set LCD_SETDDRAMADDR,0x80
+        .set LCD_BUSYFLAG,0x80
+
+@ constantes para "display entry mode"
+        .set LCD_ENTRYRIGHT,0x00
+        .set LCD_ENTRYLEFT,0x02
+        .set LCD_ENTRYSHIFTINCREMENT,0x01
+        .set LCD_ENTRYSHIFTDECREMENT,0x00
+
+@ constantes para "display on/off control"
+        .set LCD_DISPLAYON,0x04
+        .set LCD_DISPLAYOFF,0x00
+        .set LCD_CURSORON,0x02
+        .set LCD_CURSOROFF,0x00
+        .set LCD_BLINKON,0x01
+        .set LCD_BLINKOFF,0x00
+
+@ constantes para "display/cursor shift"
+        .set LCD_DISPLAYMOVE,0x08
+        .set LCD_CURSORMOVE,0x00
+        .set LCD_MOVERIGHT,0x04
+        .set LCD_MOVELEFT,0x00
+
+@ constantes para "function set"
+        .set LCD_8BITMODE,0x10
+        .set LCD_4BITMODE,0x00
+        .set LCD_2LINE,0x08
+        .set LCD_1LINE,0x00
+        .set LCD_5x10DOTS,0x04
+        .set LCD_5x8DOTS,0x00
 
 @ define tamanho das pilhas
 	.equ TAM_PILHA_FIQ,0x100
@@ -49,6 +90,23 @@ _start:
 	bic 	r0, r0, #FIQ  	    @ interrupções IRQ habilitadas
 	msr		cpsr, r0			@ processador agora no modo usuário
 	mov		sp, #0x40000		@ pilha do usuário no final da memória
+
+	@ comando LCD
+	mov	r0,#LCD_FUNCTIONSET+LCD_8BITMODE+LCD_2LINE+LCD_5x8DOTS
+	                        	@ r0 tem comando
+	bl      wr_cmd				@ escreve comando no display
+	mov	r0,#LCD_CLEARDISPLAY
+	                        	@ r0 tem comando: clear display
+	bl      wr_cmd				@ escreve comando no display
+	mov	r0,#LCD_RETURNHOME
+	                        	@ r0 tem comando: cursor home
+	bl      wr_cmd				@ escreve comando no display
+	mov	r0,#LCD_DISPLAYCONTROL+LCD_DISPLAYON+LCD_BLINKOFF
+	                        	@ r0 tem comando
+	bl      wr_cmd				@ escreve comando no display
+    ldr     r1, =msg_inicio		@ escreve mensagem no display, primeira linha
+	bl      write_msg
+
 ini:
 	@ inicializa random
 	ldr     r0,=init        	@ carrega primeiro parâmetro
@@ -372,6 +430,40 @@ espera:
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr
 
+@ wr_cmd
+@ escreve comando em r0 no display
+wr_cmd:
+	ldr	r6,=ADISPLAY_CMD @ r6 tem porta display
+	ldrb	r5,[r6]
+	tst     r5,#LCD_BUSYFLAG
+	beq	wr_cmd           @ espera BF ser 1
+	strb	r0,[r6]
+	mov	pc,lr
+
+@ wr_dat
+@ escreve dado em r0 no display
+wr_dat:
+	ldr	r6,=ADISPLAY_CMD @ r6 tem porta display
+	ldrb	r5,[r6]          @ lê flag BF
+	tst     r5,#LCD_BUSYFLAG
+	beq	wr_dat           @ espera BF ser 1
+	ldr	r6,=ADISPLAY_DAT @ r6 tem porta display
+	strb	r0,[r6]
+	mov	pc,lr
+
+@ write_msg
+@ escreve cadeia de caracteres apontada por r1, terminada com caractere nulo
+write_msg:
+	push    {lr}
+	mov	r4, #0     @ endereço inicial
+write_msg1:
+	ldrb    r0,[r1,r4] @ caractere a ser escrito
+	teq	r0,#0
+	popeq   {pc}       @ final da cadeia
+	bl      wr_dat     @ escreve caractere
+	add     r1,#1      @ avança contador
+	b       write_msg1
+
 
 @ tratador da interrupcao
 @ aqui quando timer expirou
@@ -389,7 +481,7 @@ flag:
 F:
 	.word 1
 N:
-	.word 2
+	.word 4
 V:
 	.word 1
 ultimo_led:
@@ -402,6 +494,12 @@ seq_correta:
 	.word 0x00
 seq_digitada:					@ sequencia digitada
 	.word 0x00
+msg_inicio:
+@    .asciz      "Hello, ARM!"
+    .asciz      "Inico do jogo"
+msg2:
+@    .asciz      "I am alive!"
+    .asciz      "Eu sou azul."
 digitos:
 	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f,0x4e
 init:
