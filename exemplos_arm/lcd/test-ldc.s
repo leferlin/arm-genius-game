@@ -2,7 +2,7 @@
 @ compatível com controlador HITACHI HD44780
 
 	.global _start  @ ligador necessita deste rótulo
-	
+
 @ constantes para "commands"
         .set LCD_CLEARDISPLAY,0x01
         .set LCD_RETURNHOME,0x02
@@ -13,7 +13,7 @@
         .set LCD_SETCGRAMADDR,0x40
         .set LCD_SETDDRAMADDR,0x80
         .set LCD_BUSYFLAG,0x80
-	
+
 @ constantes para "display entry mode"
         .set LCD_ENTRYRIGHT,0x00
         .set LCD_ENTRYLEFT,0x02
@@ -33,7 +33,7 @@
         .set LCD_CURSORMOVE,0x00
         .set LCD_MOVERIGHT,0x04
         .set LCD_MOVELEFT,0x00
-	
+
 @ constantes para "function set"
         .set LCD_8BITMODE,0x10
         .set LCD_4BITMODE,0x00
@@ -63,35 +63,35 @@
 
 	.org 0x1000
 _start:
-	mov	sp,#0x400	@ seta pilha do modo supervisor
-	mov	r0,#IRQ_MODE	@ coloca processador no modo IRQ (interrupção externa)
-	msr	cpsr,r0		@ processador agora no modo IRQ
-	mov	sp,#0x300	@ seta pilha de interrupção IRQ
-	mov	r0,#USER_MODE	@ coloca processador no modo usuário
+	mov		sp,#0x400		@ seta pilha do modo supervisor
+	mov		r0,#IRQ_MODE	@ coloca processador no modo IRQ (interrupção externa)
+	msr		cpsr,r0			@ processador agora no modo IRQ
+	mov		sp,#0x300		@ seta pilha de interrupção IRQ
+	mov		r0,#USER_MODE	@ coloca processador no modo usuário
 	bic     r0,r0,#IRQ      @ interrupções IRQ habilitadas
-	msr	cpsr,r0		@ processador agora no modo usuário
-	mov	sp,#0x10000	@ pilha do usuário no final da memória 
+	msr		cpsr,r0			@ processador agora no modo usuário
+	mov		sp,#0x10000		@ pilha do usuário no final da memória
 
-	mov	r0,#LCD_FUNCTIONSET+LCD_8BITMODE+LCD_2LINE+LCD_5x8DOTS
+	mov		r0,#LCD_FUNCTIONSET+LCD_8BITMODE+LCD_2LINE+LCD_5x8DOTS
 	                        @ r0 tem comando
-	bl      wr_cmd		@ escreve comando no display
+	bl      wr_cmd			@ escreve comando no display
 
-	mov	r0,#LCD_CLEARDISPLAY
+	mov		r0,#LCD_CLEARDISPLAY
 	                        @ r0 tem comando: clear display
-	bl      wr_cmd		@ escreve comando no display
+	bl      wr_cmd			@ escreve comando no display
 
-	mov	r0,#LCD_RETURNHOME
+	mov		r0,#LCD_RETURNHOME
 	                        @ r0 tem comando: cursor home
-	bl      wr_cmd		@ escreve comando no display
+	bl      wr_cmd			@ escreve comando no display
 
-	mov	r0,#LCD_DISPLAYCONTROL+LCD_DISPLAYON+LCD_BLINKOFF
+	mov		r0,#LCD_DISPLAYCONTROL+LCD_DISPLAYON+LCD_BLINKOFF
 	                        @ r0 tem comando
-	bl      wr_cmd		@ escreve comando no display
-	
-        ldr     r1, =msg        @ escreve mensagem no display, primeira linha 
+	bl      wr_cmd			@ escreve comando no display
+
+    ldr     r1, =msg        @ escreve mensagem no display, primeira linha
 	bl      write_msg
 
-	mov	r0,#(LCD_SETDDRAMADDR+64)
+	mov		r0,#(LCD_SETDDRAMADDR+64)
 	                        @ r0 tem comando: endereço inicio da segunda linha
 	                        @ para 16x2 e 20x2:
 	                        @   primeira linha: 0..39 (0x00..0x27)
@@ -102,15 +102,15 @@ _start:
 	                        @   terceira linha: 20..39 (0x14..0x27)
 	                        @   quarta linha:  84..103 (0x54..0x67)
 
-	bl      wr_cmd		@ escreve comando no display
-        ldr     r1, =msg2       @ escreve mensagem no display, segunda linha
+	bl      wr_cmd			@ escreve comando no display
+    ldr     r1, =msg2       @ escreve mensagem no display, segunda linha
 	bl      write_msg
 
 	ldr	r0,=INTERVAL
 	ldr	r6,=TIMER
 	str  	r0,[r6]		@ seta timer
 
-	
+
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @ loop principal
 @ faz shift a cada tick to timer
@@ -155,7 +155,7 @@ wr_dat:
 @ write_msg
 @ escreve cadeia de caracteres apontada por r1, terminada com caractere nulo
 write_msg:
-	push    {lr}	
+	push    {lr}
 	mov	r4, #0     @ endereço inicial
 write_msg1:
 	ldrb    r0,[r1,r4] @ caractere a ser escrito
@@ -175,7 +175,7 @@ msg2:
     .asciz      "Eu sou azul."
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@ tratador da interrupcao	
+@ tratador da interrupcao
 @ aqui quando timer expirou
 	.align 4
 tratador_timer:

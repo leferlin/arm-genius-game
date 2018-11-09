@@ -20,4 +20,4 @@ rgyb 0x90040
 # portcmd portdata color size
 # size can be 16x2, 20x2 or 20x4
 # color can be blue, green or amber
-0x90000 0x90001 blue 20x2  
+0x90000 0x90001 amber 20x4  

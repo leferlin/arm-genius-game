@@ -9,7 +9,7 @@ random: random.c
 assembler: atividade1.s
 	./arm-none-eabi-linux-as -o atividade1.o atividade1.s
 
-linker: random assembler mapa.lds
+linker: random.o assembler mapa.lds
 	./arm-none-eabi-linux-ld -o atividade1 -T mapa.lds atividade1.o random.o
 
 run: devices.txt linker

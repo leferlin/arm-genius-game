@@ -97,10 +97,26 @@ _start:
 	msr		cpsr, r0			@ processador agora no modo usuário
 	mov		sp, #0x40000		@ pilha do usuário no final da memória
 
-	ldr 	r1, =msg_inicio		@ parametro para funcao, endereco da mensagem
+	@ mensagem de inicio
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
+	ldr 	r1, =msg_inicio		@ parametro para funcao, endereco da mensagem
+	mov 	r3, #0x00 			@ apenas uma linhas
 	bl 		escreve_mensagem	@ limpa tela e escreve nova mensagem
 	pop 	{r0-r3,lr}			@ restaura valores dos registradores
+	@ mostra mensagem por 1 s
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
+	pop 	{r0-r3,lr}
+aguarda_start:
+	ldr 	r7, =flag
+	ldr 	r6, [r7]
+	cmp 	r6, #0x00
+	beq 	aguarda_start
+	push 	{r0-r3,lr}
+	bl 		limpa_display		@ limpa e reinicia display
+	pop 	{r0-r3,lr}
+	mov 	r6, #0x00
+	str 	r6, [r7]
 
 ini:
 	@ inicializa random
@@ -110,7 +126,30 @@ ini:
 
 	ldr 	r4, =LEDS
 	mov 	r0, #0
-	str 	r0, [r4]			@ acende leds
+	str 	r0, [r4]			@ apaga leds
+
+	@ mostra fase e numero de leds
+	ldr 	r1, =fases1
+	ldr 	r2, =n4
+	mov 	r3, #0x01			@ parametro da funcao, 2 linhas
+	push 	{r0-r3,lr}
+	bl 		escreve_mensagem
+	pop		{r0-r3,lr}
+	@ mostra mensagem por 1 s
+	push 	{r0-r3,lr}
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
+	pop 	{r0-r3,lr}
+aguarda_ini:
+	ldr 	r7, =flag
+	ldr 	r6, [r7]
+	cmp 	r6, #0x00
+	beq 	aguarda_ini
+	push 	{r0-r3,lr}
+	bl 		limpa_display		@ limpa e reinicia display
+	pop 	{r0-r3,lr}
+	mov 	r6, #0x00
+	str 	r6, [r7]
 
 	mov 	r0, #0				@ valor display
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
@@ -130,12 +169,6 @@ ini:
 
 
 loop_display:
-	ldr 	r6, =n_seq
-	ldr 	r7, [r6]
-	mov 	r8, #SEQ_MAX
-	cmp 	r7, r8				@ Se a sequencia foi digitada 3 vezes
-	beq		erro_seq_max		@ termina
-
 	@ testa se ja mostrou todos leds
 	ldr 	r7, =n_leds
 	ldr 	r8, [r7] 			@ r8 contem numerdo de leds mostrados
@@ -261,23 +294,16 @@ compara_sequencia:
 	ldr 	r5, [r5]
 	cmp 	r4, r5
 	beq 	proxima_fase
-
+	@ verifica se atingiu numero maximo de tentativas
+	ldr 	r6, =n_seq
+	ldr 	r7, [r6]
+	mov 	r8, #SEQ_MAX
+	cmp 	r7, r8				@ Se a sequencia foi digitada 3 vezes
+	beq		erro_seq_max		@ termina
 	@ mostra mensagem de erro na sequencia
-	ldr     r1, =msg_erro_seq
 	push 	{r0-r3,lr}
-	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
-	pop 	{r0-r3, lr}
-	push 	{r0-r3,lr}
-	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
-	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
+	bl 		erro_seq
 	pop 	{r0-r3,lr}
-aguarda:
-	ldr 	r7, =flag
-	ldr 	r6, [r7]
-	cmp 	r6, #0x00
-	beq 	aguarda
-	mov 	r6, #0x00
-	str 	r6, [r7]
 
 	ldr 	r6, =n_seq
 	ldr 	r7, [r6]
@@ -456,9 +482,11 @@ zera_variaveis:
 
 @ erro de tempo esgotado
 erro_tempo:
+	@ define mensagem a ser mostrada
 	ldr     r1, =msg_erro
 	push 	{r0-r3,lr}
 	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
+	pop 	{r0-r3,lr}
 	@ mostra mensagem por 1 s
 	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
 	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
@@ -468,15 +496,12 @@ aguarda_tempo:
 	ldr 	r6, [r7]
 	cmp 	r6, #0x00
 	beq 	aguarda_tempo
+	push 	{r0-r3,lr}
+	bl 		limpa_display		@ limpa e reinicia display
+	pop 	{r0-r3,lr}
 	mov 	r6, #0x00
 	str 	r6, [r7]
 
-	pop 	{r0-r3,lr}
-	mov 	r0, #0xF
-	ldr 	r4, =LEDS
-	str 	r0, [r4]			@ acende leds
-	mov 	r0, #10
-	bl 		display
 	@ restaura valores de N e F para os valores padroes
 	ldr 	r4, =N
 	mov 	r5, #4
@@ -487,8 +512,35 @@ aguarda_tempo:
 	str 	r5, [r4]
 	b 		zera_variaveis		@ zera variaveis e retorna ao inicio
 
+@ mostra mensagem de erro na sequencia
+erro_seq:
+	push 	{r4-r11}
+	@ define mensagem a ser mostrada
+	ldr     r1, =msg_erro_seq
+	push 	{r0-r3,lr}
+	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
+	pop 	{r0-r3, lr}
+	@ mostra mensagem por 1 s
+	push 	{r0-r3,lr}
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
+	pop 	{r0-r3,lr}
+aguarda:
+	ldr 	r7, =flag
+	ldr 	r6, [r7]
+	cmp 	r6, #0x00
+	beq 	aguarda
+	push 	{r0-r3,lr}
+	bl 		limpa_display		@ limpa e reinicia display
+	pop 	{r0-r3,lr}
+	mov 	r6, #0x00
+	str 	r6, [r7]
+	pop 	{r4-r11}
+	bx		lr
+
 @ erro do numerdo de sequencias maximo atingido
 erro_seq_max:
+	@ define mensagem a ser mostrada
 	ldr     r1, =msg_erro_max
 	push 	{r0-r3,lr}
 	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
@@ -502,8 +554,12 @@ aguarda_max:
 	ldr 	r6, [r7]
 	cmp 	r6, #0x00
 	beq 	aguarda_max
+	push 	{r0-r3,lr}
+	bl 		limpa_display		@ limpa e reinicia display
+	pop 	{r0-r3,lr}
 	mov 	r6, #0x00
 	str 	r6, [r7]
+
 	@ restaura valores de N e F para os valores padroes
 	ldr 	r4, =N
 	mov 	r5, #4
@@ -516,8 +572,10 @@ aguarda_max:
 
 @ escreve_mensagem
 @ procedimento escreve dado em r0 no display
-@ entrada:		endereco da mensagem em r1
-@ saida: 		nao ha
+@ entrada:		endereco da mensagem da primeira linhas em r1
+@ 		 		endereco da mensagem da segunda linha em r2
+@ 				r3 contem 1 se mensagem tem duas linhas, 0 caso contrario
+@ saida:		nao ha
 escreve_mensagem:
 	push 	{r4-r11}
 	@ comando LCD
@@ -541,8 +599,61 @@ escreve_mensagem:
 	push 	{r0-r3,lr}
 	bl      wr_cmd				@ escreve comando no display
 	pop 	{r0-r3,lr}
+	@ escreve primeira linha
 	push 	{r0-r3,lr}
 	bl      write_msg
+	pop 	{r0-r3,lr}
+
+	@ escreve segunda linha
+	cmp 	r3, #0x00			@ Se nao ha segunda linha, retorna
+	beq 	fim_escreve_mensagem
+	mov		r0,#(LCD_SETDDRAMADDR+64)
+	                        @ r0 tem comando: endereço inicio da segunda linha
+	                        @ para 16x2 e 20x2:
+	                        @   primeira linha: 0..39 (0x00..0x27)
+	                        @   segunda linha: 64..103 (0x40..0x67)
+	                        @ para 20x4:
+	                        @   primeira linha: 0..19 (0x00..0x13)
+	                        @   segunda linha:64..83 (0x40..0x53)
+	                        @   terceira linha: 20..39 (0x14..0x27)
+	                        @   quarta linha:  84..103 (0x54..0x67)
+	push 	{r0-r3,lr}
+	bl      wr_cmd			@ escreve comando no display
+	pop 	{r0-r3,lr}
+    push 	{r0-r3,lr}
+	mov     r1, r2	      	@ escreve mensagem no display, segunda linha
+	bl      write_msg
+	pop 	{r0-r3,lr}
+fim_escreve_mensagem:
+	pop 	{r4-r11}
+	bx 		lr
+
+@ limpa_display
+@ procedimento escreve dado em r0 no display
+@ entrada:		nao ha
+@ saida: 		nao ha
+limpa_display:
+	push 	{r4-r11}
+	@ comando LCD
+	mov		r0,#LCD_FUNCTIONSET+LCD_8BITMODE+LCD_2LINE+LCD_5x8DOTS
+	                        	@ r0 tem comando
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
+	pop 	{r0-r3,lr}
+	mov		r0,#LCD_CLEARDISPLAY
+	                        	@ r0 tem comando: clear display
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
+	pop 	{r0-r3,lr}
+	mov		r0,#LCD_RETURNHOME
+	                        	@ r0 tem comando: cursor home
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
+	pop 	{r0-r3,lr}
+	mov		r0,#LCD_DISPLAYCONTROL+LCD_DISPLAYON+LCD_BLINKOFF
+	                        	@ r0 tem comando
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
 	pop 	{r0-r3,lr}
 	pop 	{r4-r11}
 	bx 		lr
@@ -550,35 +661,35 @@ escreve_mensagem:
 @ wr_cmd
 @ escreve comando em r0 no display
 wr_cmd:
-	ldr	r6,=ADISPLAY_CMD @ r6 tem porta display
+	ldr		r6,=ADISPLAY_CMD 	@ r6 tem porta display
 	ldrb	r5,[r6]
 	tst     r5,#LCD_BUSYFLAG
-	beq	wr_cmd           @ espera BF ser 1
+	beq		wr_cmd           	@ espera BF ser 1
 	strb	r0,[r6]
-	mov	pc,lr
+	mov		pc,lr
 
 @ wr_dat
 @ escreve dado em r0 no display
 wr_dat:
-	ldr	r6,=ADISPLAY_CMD @ r6 tem porta display
-	ldrb	r5,[r6]          @ lê flag BF
+	ldr		r6,=ADISPLAY_CMD 	@ r6 tem porta display
+	ldrb	r5,[r6]          	@ lê flag BF
 	tst     r5,#LCD_BUSYFLAG
-	beq	wr_dat           @ espera BF ser 1
-	ldr	r6,=ADISPLAY_DAT @ r6 tem porta display
+	beq		wr_dat           	@ espera BF ser 1
+	ldr		r6,=ADISPLAY_DAT 	@ r6 tem porta display
 	strb	r0,[r6]
-	mov	pc,lr
+	mov		pc,lr
 
 @ write_msg
 @ escreve cadeia de caracteres apontada por r1, terminada com caractere nulo
 write_msg:
 	push    {lr}
-	mov	r4, #0     @ endereço inicial
+	mov		r4, #0  			@ endereço inicial
 write_msg1:
-	ldrb    r0,[r1,r4] @ caractere a ser escrito
-	teq	r0,#0
-	popeq   {pc}       @ final da cadeia
-	bl      wr_dat     @ escreve caractere
-	add     r1,#1      @ avança contador
+	ldrb    r0,[r1,r4] 			@ caractere a ser escrito
+	teq		r0,#0
+	popeq   {pc}       			@ final da cadeia
+	bl      wr_dat     			@ escreve caractere
+	add     r1,#1      			@ avança contador
 	b       write_msg1
 
 
@@ -586,9 +697,9 @@ write_msg1:
 @ aqui quando timer expirou
 	.align 4
 tratador_timer:
-	ldr	r7,=flag				@ apenas liga a flag
-	mov	r8,#1
-	str	r8,[r7]
+	ldr		r7,=flag			@ apenas liga a flag
+	mov		r8,#1
+	str		r8,[r7]
 	movs	pc,lr				@ e retorna
 
 @ Dados
@@ -613,6 +724,10 @@ seq_correta:
 	.word 0x00
 seq_digitada:					@ sequencia digitada
 	.word 0x00
+fases1:
+	.asciz      "Fase 1"
+n4:
+	.asciz      "4"
 msg_inicio:
 @    .asciz      "Hello, ARM!"
     .asciz      "INICIO DO JOGO"
