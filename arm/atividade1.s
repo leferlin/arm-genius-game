@@ -28,6 +28,10 @@
 	.set INTERVALO_PRIMEIRO_BOTAO, 3000
 	.set INTERVALO_DEMAIS_BOTAO, 2000
 	.set PRIMEIRO_BIT_MASCARA, 0x01
+	.set BOTAO_VM, 0x1000
+	.set BOTAO_VD, 0x0100
+	.set BOTAO_AM, 0x0010
+	.set BOTAO_AZ, 0x0001
 
 @ constantes para "commands"
         .set LCD_CLEARDISPLAY,0x01
@@ -91,22 +95,6 @@ _start:
 	msr		cpsr, r0			@ processador agora no modo usuário
 	mov		sp, #0x40000		@ pilha do usuário no final da memória
 
-	@ comando LCD
-	mov	r0,#LCD_FUNCTIONSET+LCD_8BITMODE+LCD_2LINE+LCD_5x8DOTS
-	                        	@ r0 tem comando
-	bl      wr_cmd				@ escreve comando no display
-	mov	r0,#LCD_CLEARDISPLAY
-	                        	@ r0 tem comando: clear display
-	bl      wr_cmd				@ escreve comando no display
-	mov	r0,#LCD_RETURNHOME
-	                        	@ r0 tem comando: cursor home
-	bl      wr_cmd				@ escreve comando no display
-	mov	r0,#LCD_DISPLAYCONTROL+LCD_DISPLAYON+LCD_BLINKOFF
-	                        	@ r0 tem comando
-	bl      wr_cmd				@ escreve comando no display
-    ldr     r1, =msg_inicio		@ escreve mensagem no display, primeira linha
-	bl      write_msg
-
 ini:
 	@ inicializa random
 	ldr     r0,=init        	@ carrega primeiro parâmetro
@@ -132,6 +120,10 @@ ini:
 	mul 	r0, r1
 	bl	 	redefine_timer		@ seta timer
 	pop 	{r0-r3,lr}
+	ldr 	r1, =msg_inicio		@ parametro para funcao, endereco da mensagem
+	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
+	bl 		escreve_mensagem	@ limpa tela e escreve nova mensagem
+	pop 	{r0-r3,lr}			@ restaura valores dos registradores
 
 
 loop_display:
@@ -253,7 +245,6 @@ aguarda2:
 	beq 	compara_sequencia
 	b		aguarda_demais_botoes
 
-
 @ compara_sequencia
 @ procedimento compara sequecian digitada com sequencia original
 @ entrada:	nao ha
@@ -314,7 +305,6 @@ le_botoes:
 @ saida:	nao ha
 mostra_led:
     push	{r4-r11}			@ guarda valores dos registradores
-
 gera_led:
 	push	{lr}				@ guarda valores dos registradores na pilha
 	bl 		botao_aleatorio		@ escolhe um botao aleatorio, valor em r0
@@ -325,12 +315,6 @@ gera_led:
 	cmp 	r0, r3 				@ Se o botao for o mesmo exibido na ultima vez
 	beq 	gera_led			@ escolhe novo led
 								@ Caso contrario
-	ldr 	r7, =seq_correta
-	ldr 	r6, [r7]
-	lsl 	r6, #2
-	orr 	r6, r0				@ atualaliza sequencia correta
-	str 	r6, [r7]			@ salva sequencia
-
 	ldr 	r4, =LEDS
 	str 	r0, [r4]			@ acende leds
 	str 	r0, [r2]
@@ -341,14 +325,24 @@ gera_led:
 @ botao_aleatorio
 @ procedimento gera sequencia aleatória
 @ entrada:	nao ha
-@ saida:	nao ha
+@ saida:	mascara para botao aleatorio em r0
 botao_aleatorio:
     push	{r4-r11}			@ oguarda valores dos registradores
 
     push    {lr}          		@ guarda valores dos regs
 	bl      genrand_int32		@ chama gerador, resultado em r0
 	pop 	{lr}
-	lsr 	r0, #30				@ 2 bits aleatorios (valores no intervalo [0,4])
+	and 	r0, #0x03			@ 2 bits aleatorios (valores no intervalo [0,3])
+
+	@ atualiza sequencia correta
+	ldr 	r7, =seq_correta
+	ldr 	r6, [r7]
+	lsl 	r6, #2
+	mov 	r8, #3
+	sub 	r8, r0
+	orr 	r6, r6, r8			@ atualaliza sequencia correta
+	str 	r6, [r7]			@ salva sequencia
+
 	ldr 	r1, =PRIMEIRO_BIT_MASCARA
 	lsl 	r0, r1, r0			@ r0 contem um unico bit 1
 
@@ -418,6 +412,10 @@ proxima_fase:
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 	@ TESTE
 fim:
+	ldr     r1, =msg_erro
+	push 	{r0-r3,lr}
+	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
+	pop 	{r0-r3,lr}
 	mov 	r0, #0xF
 	ldr 	r4, =LEDS
 	str 	r0, [r4]			@ acende leds
@@ -429,6 +427,39 @@ espera:
 
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr
+
+@ escreve_mensagem
+@ procedimento escreve dado em r0 no display
+@ entrada:		endereco da mensagem em r1
+@ saida: 		nao ha
+escreve_mensagem:
+	push 	{r4-r11}
+	@ comando LCD
+	mov		r0,#LCD_FUNCTIONSET+LCD_8BITMODE+LCD_2LINE+LCD_5x8DOTS
+	                        	@ r0 tem comando
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
+	pop 	{r0-r3,lr}
+	mov		r0,#LCD_CLEARDISPLAY
+	                        	@ r0 tem comando: clear display
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
+	pop 	{r0-r3,lr}
+	mov		r0,#LCD_RETURNHOME
+	                        	@ r0 tem comando: cursor home
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
+	pop 	{r0-r3,lr}
+	mov		r0,#LCD_DISPLAYCONTROL+LCD_DISPLAYON+LCD_BLINKOFF
+	                        	@ r0 tem comando
+	push 	{r0-r3,lr}
+	bl      wr_cmd				@ escreve comando no display
+	pop 	{r0-r3,lr}
+	push 	{r0-r3,lr}
+	bl      write_msg
+	pop 	{r0-r3,lr}
+	pop 	{r4-r11}
+	bx 		lr
 
 @ wr_cmd
 @ escreve comando em r0 no display
@@ -481,7 +512,7 @@ flag:
 F:
 	.word 1
 N:
-	.word 4
+	.word 2
 V:
 	.word 1
 ultimo_led:
@@ -497,9 +528,9 @@ seq_digitada:					@ sequencia digitada
 msg_inicio:
 @    .asciz      "Hello, ARM!"
     .asciz      "Inico do jogo"
-msg2:
+msg_erro:
 @    .asciz      "I am alive!"
-    .asciz      "Eu sou azul."
+    .asciz      "Erro. Reiniciando..."
 digitos:
 	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f,0x4e
 init:
