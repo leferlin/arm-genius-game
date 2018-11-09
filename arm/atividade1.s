@@ -23,10 +23,12 @@
 	.set LEDS, 			0x90040
 	.set ADISPLAY_DAT,	0x90001
 	.set ADISPLAY_CMD,	0x90000
+	.set SLIDER, 		0x90050
+
 @ constantes
 	.set INTERVALO_DISPLAY, 100
 	.set INTERVALO_PRIMEIRO_BOTAO, 3000
-	.set INTERVALO_DEMAIS_BOTAO, 2000
+	.set INTERVALO_DEMAIS_BOTAO, 1000
 	.set MASCARA_PRIMEIRO_BIT, 0x01
 	.set MASCARA_DOIS_BITS, 0x03
 	.set BOTAO_VM, 0x1000
@@ -119,6 +121,12 @@ aguarda_start:
 	str 	r6, [r7]
 
 ini:
+	@ Define velocidade a partir do slider
+	ldr 	r1, =SLIDER
+	ldr 	r2, [r1]
+	ldr 	r3, =V
+	str 	r2, [r3]
+
 	@ inicializa random
 	ldr     r0,=init        	@ carrega primeiro parâmetro
 	mov     r1,#4           	@ carrega segundo parâmetro
@@ -129,8 +137,17 @@ ini:
 	str 	r0, [r4]			@ apaga leds
 
 	@ mostra fase e numero de leds
-	ldr 	r1, =fases1
-	ldr 	r2, =n4
+	ldr 	r1, =msg_fase
+	ldr     r3, =F
+	ldr 	r3, [r3]
+	add 	r3, #48
+	strb 	r3, [r1,#5]			@ altera numero da fase na cadeia ascii
+
+	ldr 	r2, =msg_n
+	ldr     r3, =N
+	ldr 	r3, [r3]
+	add 	r3, #48
+	strb 	r3, [r2]			@ altera numero da fase na cadeia ascii
 	mov 	r3, #0x01			@ parametro da funcao, 2 linhas
 	push 	{r0-r3,lr}
 	bl 		escreve_mensagem
@@ -151,10 +168,12 @@ aguarda_ini:
 	mov 	r6, #0x00
 	str 	r6, [r7]
 
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 	mov 	r0, #0				@ valor display
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
 	bl 		display				@ mostra valor inicial
 	pop 	{r0-r3,lr}			@ restaura valores dos registradores
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 	@ calcula intervalo botoes
 	push 	{r0-r3,lr}
@@ -184,6 +203,7 @@ loop_display:
 	mov		r2, #0				@ reseta flag
 	str		r2, [r3]
 
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 	@ incrementa contadores
 	add		r0, r0, #1			@ incrementa contador decimos
 	cmp		r0, #10				@ se completou 10 decimos de segundo
@@ -193,6 +213,7 @@ loop_display:
 	push 	{r0-r3,lr}
 	bl 		display
 	pop 	{r0-r3,lr}
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
 	bl 		mostra_led			@ mostra led aleatorio
@@ -214,7 +235,7 @@ aguarda_primeiro_botao:
 	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
 	bl	 	redefine_timer		@ seta timer com intervalo INTERVALO_PRIMEIRO_BOTAO
 	pop 	{r0-r3,lr}
-aguarda1:
+aguarda_prim:
 	@ verifica se o timer expirou (3s)
 	ldr		r3, =flag
 	ldr		r2, [r3]
@@ -230,7 +251,7 @@ aguarda1:
 	pop 	{r0-r3,lr}
 
 	cmp 	r8, #-1				@ Se nao foi pressiondo nenhum botao
-	beq		aguarda1			@ aguarda
+	beq		aguarda_prim		@ aguarda
 	ldr 	r5, =seq_digitada	@ caso contrario
 	ldr 	r4, [r5]
 	lsl 	r4, #2
@@ -284,47 +305,6 @@ aguarda2:
 	cmp 	r2, r4
 	beq 	compara_sequencia
 	b		aguarda_demais_botoes
-
-@ compara_sequencia
-@ compara sequecian digitada com sequencia original
-compara_sequencia:
-	ldr 	r4, =seq_correta
-	ldr 	r4, [r4]
-	ldr 	r5, =seq_digitada
-	ldr 	r5, [r5]
-	cmp 	r4, r5
-	beq 	proxima_fase
-	@ verifica se atingiu numero maximo de tentativas
-	ldr 	r6, =n_seq
-	ldr 	r7, [r6]
-	mov 	r8, #SEQ_MAX
-	cmp 	r7, r8				@ Se a sequencia foi digitada 3 vezes
-	beq		erro_seq_max		@ termina
-	@ mostra mensagem de erro na sequencia
-	push 	{r0-r3,lr}
-	bl 		erro_seq
-	pop 	{r0-r3,lr}
-
-	ldr 	r6, =n_seq
-	ldr 	r7, [r6]
-	add 	r7, #1
-	str 	r7, [r6]			@ atualiza numero de sequencias e salva
-	ldr 	r4, =n_botoes
-	mov 	r5, #0x00
-	str 	r5, [r4]			@ reinicia numero de botoes
-	ldr 	r4, =n_leds
-	mov 	r5, #0x00
-	str 	r5, [r4]			@ reinicia numero de leds
-	ldr 	r4, =seq_correta
-	mov 	r5, #0x00
-	str 	r5, [r4]			@ reinicia sequencia correta
-	ldr 	r4, =seq_digitada
-	mov 	r5, #0x00
-	str 	r5, [r4]			@ reinicia sequencia digitada
-	ldr 	r4, =ultimo_led
-	mov 	r5, #0x0F
-	str 	r5, [r4]			@ reinicia ultimo led
-	b  		ini
 
 @ le_botoes
 @ procedimento le o proximo botao pressionado
@@ -417,6 +397,47 @@ botao_aleatorio:
 	bx		lr					@ retorna
 
 
+@ compara_sequencia
+@ compara sequecian digitada com sequencia original
+compara_sequencia:
+	ldr 	r4, =seq_correta
+	ldr 	r4, [r4]
+	ldr 	r5, =seq_digitada
+	ldr 	r5, [r5]
+	cmp 	r4, r5
+	beq 	proxima_fase
+	@ verifica se atingiu numero maximo de tentativas
+	ldr 	r6, =n_seq
+	ldr 	r7, [r6]
+	mov 	r8, #SEQ_MAX
+	cmp 	r7, r8				@ Se a sequencia foi digitada 3 vezes
+	beq		erro_seq_max		@ termina
+	@ mostra mensagem de erro na sequencia
+	push 	{r0-r3,lr}
+	bl 		erro_seq
+	pop 	{r0-r3,lr}
+
+	ldr 	r6, =n_seq
+	ldr 	r7, [r6]
+	add 	r7, #1
+	str 	r7, [r6]			@ atualiza numero de sequencias e salva
+	ldr 	r4, =n_botoes
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia numero de botoes
+	ldr 	r4, =n_leds
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia numero de leds
+	ldr 	r4, =seq_correta
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia sequencia correta
+	ldr 	r4, =seq_digitada
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia sequencia digitada
+	ldr 	r4, =ultimo_led
+	mov 	r5, #0x0F
+	str 	r5, [r4]			@ reinicia ultimo led
+	b  		ini
+
 @ redefine_timer
 @ procedimento define/redefine o timer do sistema
 @ entrada:	intervalo do timer em r0
@@ -430,6 +451,7 @@ redefine_timer:
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr
 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @ TESTE
 @ display
 @ procedimento escreve os digitos nos displays de 7 segmentos
@@ -447,6 +469,7 @@ display:
 	@strb  	r5,[r2]				@ seta valor dos decimos no display
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr					@ retorna
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 @ proxima_fase
 @ atualiza variaveis F, N
@@ -483,8 +506,9 @@ zera_variaveis:
 @ erro de tempo esgotado
 erro_tempo:
 	@ define mensagem a ser mostrada
-	ldr     r1, =msg_erro
 	push 	{r0-r3,lr}
+	ldr     r1, =msg_erro		@ prepara parametros
+	mov 	r3, #0x00
 	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
 	pop 	{r0-r3,lr}
 	@ mostra mensagem por 1 s
@@ -508,7 +532,6 @@ aguarda_tempo:
 	str 	r5, [r4]
 	ldr 	r4, =F
 	mov 	r5, #1
-	add 	r5, #1
 	str 	r5, [r4]
 	b 		zera_variaveis		@ zera variaveis e retorna ao inicio
 
@@ -516,8 +539,10 @@ aguarda_tempo:
 erro_seq:
 	push 	{r4-r11}
 	@ define mensagem a ser mostrada
-	ldr     r1, =msg_erro_seq
 	push 	{r0-r3,lr}
+	ldr     r1, =msg_erro_seq1
+	ldr 	r2, =msg_erro_seq2
+	mov 	r3, #0x01
 	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
 	pop 	{r0-r3, lr}
 	@ mostra mensagem por 1 s
@@ -541,8 +566,10 @@ aguarda:
 @ erro do numerdo de sequencias maximo atingido
 erro_seq_max:
 	@ define mensagem a ser mostrada
-	ldr     r1, =msg_erro_max
 	push 	{r0-r3,lr}
+	ldr     r1, =msg_erro_max1	@ prepara parametros
+	ldr 	r2, =msg_erro_max2
+	mov 	r3, #0x01
 	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
 	pop 	{r0-r3,lr}
 	@ mostra mensagem por 1 s
@@ -566,7 +593,6 @@ aguarda_max:
 	str 	r5, [r4]
 	ldr 	r4, =F
 	mov 	r5, #1
-	add 	r5, #1
 	str 	r5, [r4]
 	b 		zera_variaveis		@ zera variaveis e retorna ao inicio
 
@@ -719,27 +745,33 @@ n_botoes:						@ numero de botoes digitados
 n_leds:
 	.word 0x00					@ numero de leds mostrados
 n_seq:
-	.word 0x00					@ numero de sequencias erradas digitadas
+	.word 0x01					@ numero de sequencias erradas digitadas
 seq_correta:
 	.word 0x00
 seq_digitada:					@ sequencia digitada
 	.word 0x00
-fases1:
-	.asciz      "Fase 1"
-n4:
-	.asciz      "4"
+msg_fase:
+	.asciz      "Fase k"
+msg_n:
+	.asciz      "n"
 msg_inicio:
 @    .asciz      "Hello, ARM!"
-    .asciz      "INICIO DO JOGO"
+    .asciz      "Inicio do jogo"
 msg_erro:
 @    .asciz      "I am alive!"
-    .asciz      "TEMPO ESGOTADO"
-msg_erro_seq:
+    .asciz      "Tempo esgotado"
+msg_erro_seq1:
 @    .asciz      "I am alive!"
-    .asciz      "SEQUENCIA INCORRETA. TENTE NOVAMENTE"
-msg_erro_max:
+    .asciz      "Sequencia incorreta"
+msg_erro_seq2:
 @    .asciz      "I am alive!"
-    .asciz      "NUMERO MAXIMO DE TENTATIVA ATINGIDO"
+    .asciz      "Tente novamente"
+msg_erro_max1:
+@    .asciz      "I am alive!"
+    .asciz      "Numero de tentativas"
+msg_erro_max2:
+@    .asciz      "I am alive!"
+    .asciz      "maximo excedido"
 digitos:
 	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f,0x4e
 init:
