@@ -27,11 +27,13 @@
 	.set INTERVALO_DISPLAY, 100
 	.set INTERVALO_PRIMEIRO_BOTAO, 3000
 	.set INTERVALO_DEMAIS_BOTAO, 2000
-	.set PRIMEIRO_BIT_MASCARA, 0x01
+	.set MASCARA_PRIMEIRO_BIT, 0x01
+	.set MASCARA_DOIS_BITS, 0x03
 	.set BOTAO_VM, 0x1000
 	.set BOTAO_VD, 0x0100
 	.set BOTAO_AM, 0x0010
 	.set BOTAO_AZ, 0x0001
+	.set SEQ_MAX, 3
 
 @ constantes para "commands"
         .set LCD_CLEARDISPLAY,0x01
@@ -95,6 +97,11 @@ _start:
 	msr		cpsr, r0			@ processador agora no modo usuário
 	mov		sp, #0x40000		@ pilha do usuário no final da memória
 
+	ldr 	r1, =msg_inicio		@ parametro para funcao, endereco da mensagem
+	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
+	bl 		escreve_mensagem	@ limpa tela e escreve nova mensagem
+	pop 	{r0-r3,lr}			@ restaura valores dos registradores
+
 ini:
 	@ inicializa random
 	ldr     r0,=init        	@ carrega primeiro parâmetro
@@ -120,13 +127,15 @@ ini:
 	mul 	r0, r1
 	bl	 	redefine_timer		@ seta timer
 	pop 	{r0-r3,lr}
-	ldr 	r1, =msg_inicio		@ parametro para funcao, endereco da mensagem
-	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
-	bl 		escreve_mensagem	@ limpa tela e escreve nova mensagem
-	pop 	{r0-r3,lr}			@ restaura valores dos registradores
 
 
 loop_display:
+	ldr 	r6, =n_seq
+	ldr 	r7, [r6]
+	mov 	r8, #SEQ_MAX
+	cmp 	r7, r8				@ Se a sequencia foi digitada 3 vezes
+	beq		erro_seq_max		@ termina
+
 	@ testa se ja mostrou todos leds
 	ldr 	r7, =n_leds
 	ldr 	r8, [r7] 			@ r8 contem numerdo de leds mostrados
@@ -179,8 +188,7 @@ aguarda1:
 	cmp		r2, #0
 	movne	r2, #0				@ reseta flag
 	strne	r2, [r3]
-	@ TESTE
-	bne		fim
+	bne		erro_tempo
 
 	@ verifica se um botao foi precionado
 	push 	{r0-r3,lr}
@@ -218,8 +226,7 @@ aguarda2:
 	cmp		r2, #0
 	movne	r2, #0				@ reseta flag
 	strne	r2, [r3]
-	@ TESTE
-	bne		fim
+	bne		erro_tempo
 
 	@ verifica se um botao foi precionado
 	push 	{r0-r3,lr}
@@ -246,9 +253,7 @@ aguarda2:
 	b		aguarda_demais_botoes
 
 @ compara_sequencia
-@ procedimento compara sequecian digitada com sequencia original
-@ entrada:	nao ha
-@ saida:	nao há
+@ compara sequecian digitada com sequencia original
 compara_sequencia:
 	ldr 	r4, =seq_correta
 	ldr 	r4, [r4]
@@ -256,9 +261,44 @@ compara_sequencia:
 	ldr 	r5, [r5]
 	cmp 	r4, r5
 	beq 	proxima_fase
-	@ TESTE
-	b 		fim
 
+	@ mostra mensagem de erro na sequencia
+	ldr     r1, =msg_erro_seq
+	push 	{r0-r3,lr}
+	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
+	pop 	{r0-r3, lr}
+	push 	{r0-r3,lr}
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
+	pop 	{r0-r3,lr}
+aguarda:
+	ldr 	r7, =flag
+	ldr 	r6, [r7]
+	cmp 	r6, #0x00
+	beq 	aguarda
+	mov 	r6, #0x00
+	str 	r6, [r7]
+
+	ldr 	r6, =n_seq
+	ldr 	r7, [r6]
+	add 	r7, #1
+	str 	r7, [r6]			@ atualiza numero de sequencias e salva
+	ldr 	r4, =n_botoes
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia numero de botoes
+	ldr 	r4, =n_leds
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia numero de leds
+	ldr 	r4, =seq_correta
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia sequencia correta
+	ldr 	r4, =seq_digitada
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia sequencia digitada
+	ldr 	r4, =ultimo_led
+	mov 	r5, #0x0F
+	str 	r5, [r4]			@ reinicia ultimo led
+	b  		ini
 
 @ le_botoes
 @ procedimento le o proximo botao pressionado
@@ -332,7 +372,8 @@ botao_aleatorio:
     push    {lr}          		@ guarda valores dos regs
 	bl      genrand_int32		@ chama gerador, resultado em r0
 	pop 	{lr}
-	and 	r0, #0x03			@ 2 bits aleatorios (valores no intervalo [0,3])
+	mov 	r1, #MASCARA_DOIS_BITS
+	and 	r0, r1				@ 2 bits aleatorios (valores no intervalo [0,3])
 
 	@ atualiza sequencia correta
 	ldr 	r7, =seq_correta
@@ -343,7 +384,7 @@ botao_aleatorio:
 	orr 	r6, r6, r8			@ atualaliza sequencia correta
 	str 	r6, [r7]			@ salva sequencia
 
-	ldr 	r1, =PRIMEIRO_BIT_MASCARA
+	ldr 	r1, =MASCARA_PRIMEIRO_BIT
 	lsl 	r0, r1, r0			@ r0 contem um unico bit 1
 
 	pop 	{r4-r11}			@ restaura regs
@@ -392,6 +433,7 @@ proxima_fase:
 	ldr 	r5, [r4] 			@ r5 contem F
 	add 	r5, #1 				@ incremente F
 	str 	r5, [r4]
+zera_variaveis:
 	ldr 	r4, =n_botoes
 	mov 	r5, #0x00
 	str 	r5, [r4]			@ reinicia numero de botoes
@@ -407,26 +449,70 @@ proxima_fase:
 	ldr 	r4, =ultimo_led
 	mov 	r5, #0x0F
 	str 	r5, [r4]			@ reinicia ultimo led
+	ldr 	r4, =n_seq
+	mov 	r5, #0x00
+	str 	r5, [r4]			@ reinicia ultimo led
 	b 		ini
 
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-	@ TESTE
-fim:
+@ erro de tempo esgotado
+erro_tempo:
 	ldr     r1, =msg_erro
 	push 	{r0-r3,lr}
 	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
+	@ mostra mensagem por 1 s
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
+	pop 	{r0-r3,lr}
+aguarda_tempo:
+	ldr 	r7, =flag
+	ldr 	r6, [r7]
+	cmp 	r6, #0x00
+	beq 	aguarda_tempo
+	mov 	r6, #0x00
+	str 	r6, [r7]
+
 	pop 	{r0-r3,lr}
 	mov 	r0, #0xF
 	ldr 	r4, =LEDS
 	str 	r0, [r4]			@ acende leds
 	mov 	r0, #10
 	bl 		display
-espera:
-	b espera
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+	@ restaura valores de N e F para os valores padroes
+	ldr 	r4, =N
+	mov 	r5, #4
+	str 	r5, [r4]
+	ldr 	r4, =F
+	mov 	r5, #1
+	add 	r5, #1
+	str 	r5, [r4]
+	b 		zera_variaveis		@ zera variaveis e retorna ao inicio
 
-	pop 	{r4-r11}			@ restaura regs
-	bx		lr
+@ erro do numerdo de sequencias maximo atingido
+erro_seq_max:
+	ldr     r1, =msg_erro_max
+	push 	{r0-r3,lr}
+	bl      escreve_mensagem 	@ escreve mensagem no display, primeira linha
+	pop 	{r0-r3,lr}
+	@ mostra mensagem por 1 s
+	ldr 	r0, =INTERVALO_PRIMEIRO_BOTAO
+	bl	 	redefine_timer		@ seta timer com intervalo para 1 s
+	pop 	{r0-r3,lr}
+aguarda_max:
+	ldr 	r7, =flag
+	ldr 	r6, [r7]
+	cmp 	r6, #0x00
+	beq 	aguarda_max
+	mov 	r6, #0x00
+	str 	r6, [r7]
+	@ restaura valores de N e F para os valores padroes
+	ldr 	r4, =N
+	mov 	r5, #4
+	str 	r5, [r4]
+	ldr 	r4, =F
+	mov 	r5, #1
+	add 	r5, #1
+	str 	r5, [r4]
+	b 		zera_variaveis		@ zera variaveis e retorna ao inicio
 
 @ escreve_mensagem
 @ procedimento escreve dado em r0 no display
@@ -512,7 +598,7 @@ flag:
 F:
 	.word 1
 N:
-	.word 2
+	.word 4
 V:
 	.word 1
 ultimo_led:
@@ -521,16 +607,24 @@ n_botoes:						@ numero de botoes digitados
 	.word 0x00
 n_leds:
 	.word 0x00					@ numero de leds mostrados
+n_seq:
+	.word 0x00					@ numero de sequencias erradas digitadas
 seq_correta:
 	.word 0x00
 seq_digitada:					@ sequencia digitada
 	.word 0x00
 msg_inicio:
 @    .asciz      "Hello, ARM!"
-    .asciz      "Inico do jogo"
+    .asciz      "INICIO DO JOGO"
 msg_erro:
 @    .asciz      "I am alive!"
-    .asciz      "Erro. Reiniciando..."
+    .asciz      "TEMPO ESGOTADO"
+msg_erro_seq:
+@    .asciz      "I am alive!"
+    .asciz      "SEQUENCIA INCORRETA. TENTE NOVAMENTE"
+msg_erro_max:
+@    .asciz      "I am alive!"
+    .asciz      "NUMERO MAXIMO DE TENTATIVA ATINGIDO"
 digitos:
 	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f,0x4e
 init:
