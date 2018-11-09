@@ -1,2 +1,1 @@
-Genius game  
-arm assembly
+Genius game - arm assembly
