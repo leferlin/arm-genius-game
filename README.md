@@ -1,1 +1,1 @@
-Genius game - arm assembly
+Genius game in arm assembly language
