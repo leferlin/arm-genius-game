@@ -89,6 +89,7 @@
 
 	.text
 _start:
+
 	mov		sp, #0x400			@ seta pilha do modo supervisor
 	mov		r0, #FIQ_MODE		@ coloca processador no modo FIQ (interrupção externa)
 	msr		cpsr, r0			@ processador agora no modo FIQ
@@ -167,6 +168,13 @@ aguarda_ini:
 	mov 	r6, #0x00
 	str 	r6, [r7]
 
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+	mov 	r0, #0				@ valor display
+	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
+	bl 		display				@ mostra valor inicial
+	pop 	{r0-r3,lr}			@ restaura valores dos registradores
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
 	@ calcula intervalo botoes
 	push 	{r0-r3,lr}
 	ldr 	r1, =V
@@ -194,6 +202,18 @@ loop_display:
 	beq		loop_display
 	mov		r2, #0				@ reseta flag
 	str		r2, [r3]
+
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+	@ incrementa contadores
+	add		r0, r0, #1			@ incrementa contador decimos
+	cmp		r0, #10				@ se completou 10 decimos de segundo
+	moveq	r0, #0				@ reinicia a contagem de decimos
+
+	@ (TESTE) mostra tempo no display
+	push 	{r0-r3,lr}
+	bl 		display
+	pop 	{r0-r3,lr}
+	@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 	push	{r0-r3,lr}			@ guarda valores dos registradores na pilha
 	bl 		mostra_led			@ mostra led aleatorio
@@ -431,6 +451,26 @@ redefine_timer:
 	pop 	{r4-r11}			@ restaura regs
 	bx		lr
 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ TESTE
+@ display
+@ procedimento escreve os digitos nos displays de 7 segmentos
+@ entrada:	segundos em r0
+@ saida:	nao ha
+display:
+	push	{r4-r11}			@ guarda valores dos registradores
+	@ldr		r2,=DISPLAY_DEC		@ r2 tem porta display
+	ldr 	r4,=DISPLAY_SEG
+	ldr		r5,=digitos
+	ldrb	r6,[r5,r0]			@ padrao de bits para valor dos segundos
+	@orr 	r5,#0x80			@ Liga ponto
+	strb  	r6,[r4]				@ seta valor dos segundos no display
+	@ldrb	r5,[r4,r0]			@ padrao de bits para valor dos decimos
+	@strb  	r5,[r2]				@ seta valor dos decimos no display
+	pop 	{r4-r11}			@ restaura regs
+	bx		lr					@ retorna
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
 @ proxima_fase
 @ atualiza variaveis F, N
 proxima_fase:
@@ -460,7 +500,7 @@ zera_variaveis:
 	str 	r5, [r4]			@ reinicia ultimo led
 	ldr 	r4, =n_seq
 	mov 	r5, #0x00
-	str 	r5, [r4]			@ reinicia numero de sequencias
+	str 	r5, [r4]			@ reinicia ultimo led
 	b 		ini
 
 @ erro de tempo esgotado
@@ -715,16 +755,22 @@ msg_fase:
 msg_n:
 	.asciz      "n"
 msg_inicio:
+@    .asciz      "Hello, ARM!"
     .asciz      "Inicio do jogo"
 msg_erro:
+@    .asciz      "I am alive!"
     .asciz      "Tempo esgotado"
 msg_erro_seq1:
+@    .asciz      "I am alive!"
     .asciz      "Sequencia incorreta"
 msg_erro_seq2:
+@    .asciz      "I am alive!"
     .asciz      "Tente novamente"
 msg_erro_max1:
+@    .asciz      "I am alive!"
     .asciz      "Numero de tentativas"
 msg_erro_max2:
+@    .asciz      "I am alive!"
     .asciz      "maximo excedido"
 digitos:
 	.byte 0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b,0x4f,0x4e
